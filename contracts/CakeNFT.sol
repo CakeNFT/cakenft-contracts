@@ -1,144 +1,79 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.5;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
 import "./libraries/ERC721.sol";
 import "./libraries/ERC721Enumerable.sol";
-import "./uniswapv2/interfaces/IUniswapV2Pair.sol";
-import "./interfaces/IERC1271.sol";
+import "@openzeppelin/contracts/utils/Address.sol";
 import "./interfaces/ICakeNFT.sol";
-import "./libraries/Signature.sol";
-import "./interfaces/ICakeStaker.sol";
+import "./interfaces/IERC1271.sol";
 
-contract CakeNFT is Ownable, ERC721("CakeNFT", "CNFT"), ERC721Enumerable, ICakeNFT {
-    struct CakeNFTInfo {
-        uint256 originPower;
-        uint256 supportedLPTokenAmount;
-        uint256 cakeRewardDebt;
+contract CakeNFT is ERC721, ERC721Enumerable, ICakeNFT {
+    
+    address override public deployer;
+    modifier onlyDeployer {
+        require(msg.sender == deployer);
+        _;
     }
 
-    bytes32 private immutable _CACHED_DOMAIN_SEPARATOR;
-    uint256 private immutable _CACHED_CHAIN_ID;
-
-    bytes32 private immutable _HASHED_NAME;
-    bytes32 private immutable _HASHED_VERSION;
-    bytes32 private immutable _TYPE_HASH;
+    string public override version;
+    string public baseURI;
+    uint256 public count = 0;
+    
+    bytes32 public override DOMAIN_SEPARATOR;
 
     // keccak256("Permit(address spender,uint256 tokenId,uint256 nonce,uint256 deadline)");
-    bytes32 public constant override PERMIT_TYPEHASH =
-        0x49ecf333e5b8c95c40fdafc95c1ad136e8914a8fb55e9dc8bb01eaa83a2df9ad;
-
-    // keccak256("Permit(address owner,address spender,uint256 nonce,uint256 deadline)");
-    bytes32 public constant override PERMIT_ALL_TYPEHASH =
-        0xdaab21af31ece73a508939fedd476a5ee5129a5ed4bb091f3236ffb45394df62;
+    bytes32 public constant override PERMIT_TYPEHASH = 0x49ecf333e5b8c95c40fdafc95c1ad136e8914a8fb55e9dc8bb01eaa83a2df9ad;
 
     mapping(uint256 => uint256) public override nonces;
-    mapping(address => uint256) public override noncesForAll;
 
-    IUniswapV2Pair public immutable override lpToken;
-    CakeNFTInfo[] public override nfts;
+    constructor(
+        address _deployer,
+        string memory name,
+        string memory symbol,
+        string memory _version,
+        string memory baseURI_
+    ) ERC721(name, symbol) {
+        deployer = _deployer;
+        version = _version;
+        baseURI = baseURI_;
 
-    IERC20 public immutable override cake;
-    ICakeStaker public override cakeStaker;
-    uint256 public override pid;
-    uint256 public override cakeLastRewardBlock;
-    uint256 public override accCakePerShare;
-    bool private initialDeposited;
-
-    constructor(IUniswapV2Pair _lpToken, IERC20 _cake) {
-        lpToken = _lpToken;
-        cake = _cake;
-
-        _CACHED_CHAIN_ID = block.chainid;
-        _HASHED_NAME = keccak256(bytes("CakeNFT"));
-        _HASHED_VERSION = keccak256(bytes("1"));
-        _TYPE_HASH = keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
-
-        _CACHED_DOMAIN_SEPARATOR = keccak256(
+        uint256 chainId; assembly { chainId := chainid() }
+        DOMAIN_SEPARATOR = keccak256(
             abi.encode(
                 keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
-                keccak256(bytes("CakeNFT")),
-                keccak256(bytes("1")),
-                block.chainid,
+                keccak256(bytes(name)),
+                keccak256(bytes(_version)),
+                chainId,
                 address(this)
             )
         );
     }
 
-    function _baseURI() internal pure override returns (string memory) {
-        return "https://api.cakenft.org/nft/";
+    function set(
+        string memory name,
+        string memory symbol,
+        string memory _version,
+        string memory baseURI_
+    ) onlyDeployer external {
+        _name = name;
+        _symbol = symbol;
+        version = _version;
+        baseURI = baseURI_;
+
+        uint256 chainId; assembly { chainId := chainid() }
+        DOMAIN_SEPARATOR = keccak256(
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256(bytes(name)),
+                keccak256(bytes(_version)),
+                chainId,
+                address(this)
+            )
+        );
     }
 
-    function DOMAIN_SEPARATOR() public view override returns (bytes32) {
-        if (block.chainid == _CACHED_CHAIN_ID) {
-            return _CACHED_DOMAIN_SEPARATOR;
-        } else {
-            return keccak256(abi.encode(_TYPE_HASH, _HASHED_NAME, _HASHED_VERSION, block.chainid, address(this)));
-        }
-    }
-
-    function mint(uint256 cakeAmountToStake) external onlyOwner returns (uint256 id) {
-        id = nfts.length;
-        nfts.push(CakeNFTInfo({originPower: power, supportedLPTokenAmount: 0, cakeRewardDebt: 0}));
-        _mint(msg.sender, id);
-    }
-
-    function mintBatch(uint256[] calldata powers, uint256 amounts) external onlyOwner {
-        require(powers.length == amounts, "CakeNFT: Invalid parameters");
-        uint256 from = nfts.length;
-        for (uint256 i = 0; i < amounts; i += 1) {
-            nfts.push(CakeNFTInfo({originPower: powers[i], supportedLPTokenAmount: 0, cakeRewardDebt: 0}));
-            _mint(msg.sender, (i + from));
-        }
-    }
-
-    function support(uint256 id, uint256 lpTokenAmount) public override {
-        require(ownerOf(id) == msg.sender, "CakeNFT: Forbidden");
-        require(lpTokenAmount > 0, "CakeNFT: Invalid lpTokenAmount");
-        uint256 _supportedLPTokenAmount = nfts[id].supportedLPTokenAmount;
-
-        nfts[id].supportedLPTokenAmount = _supportedLPTokenAmount + lpTokenAmount;
-        lpToken.transferFrom(msg.sender, address(this), lpTokenAmount);
-
-        uint256 _pid = pid;
-        if (_pid > 0) {
-            uint256 _totalSupportedLPTokenAmount = cakeStaker.userInfo(_pid, address(this)).amount;
-            uint256 _accCakePerShare = _depositToCakeMasterChef(_pid, lpTokenAmount, _totalSupportedLPTokenAmount);
-            uint256 pending = (_supportedLPTokenAmount * _accCakePerShare) / 1e18 - nfts[id].cakeRewardDebt;
-            if (pending > 0) safeCakeTransfer(msg.sender, pending);
-            nfts[id].cakeRewardDebt = ((_supportedLPTokenAmount + lpTokenAmount) * _accCakePerShare) / 1e18;
-        }
-
-        emit Support(id, lpTokenAmount);
-    }
-
-    function claimCakeReward(uint256 id) public override {
-        require(ownerOf(id) == msg.sender, "CakeNFT: Forbidden");
-        uint256 _pid = pid;
-        require(_pid > 0, "CakeNFT: Unclaimable");
-        uint256 _supportedLPTokenAmount = nfts[id].supportedLPTokenAmount;
-
-        uint256 _totalSupportedLPTokenAmount = cakeStaker.userInfo(_pid, address(this)).amount;
-        uint256 _accCakePerShare = _depositToCakeMasterChef(_pid, 0, _totalSupportedLPTokenAmount);
-        uint256 pending = (_supportedLPTokenAmount * _accCakePerShare) / 1e18 - nfts[id].cakeRewardDebt;
-        require(pending > 0, "CakeNFT: Nothing can be claimed");
-        safeCakeTransfer(msg.sender, pending);
-        nfts[id].cakeRewardDebt = (_supportedLPTokenAmount * _accCakePerShare) / 1e18;
-    }
-
-    function pendingCakeReward(uint256 id) external view override returns (uint256) {
-        uint256 _pid = pid;
-        if (_pid == 0) return 0;
-        uint256 _supportedLPTokenAmount = nfts[id].supportedLPTokenAmount;
-        uint256 _totalSupportedLPTokenAmount = cakeStaker.userInfo(_pid, address(this)).amount;
-
-        uint256 _accCakePerShare = accCakePerShare;
-        if (block.number > cakeLastRewardBlock && _totalSupportedLPTokenAmount != 0) {
-            uint256 reward = cakeStaker.pendingCake(pid, address(this));
-            _accCakePerShare += ((reward * 1e18) / _totalSupportedLPTokenAmount);
-        }
-
-        return (_supportedLPTokenAmount * _accCakePerShare) / 1e18 - nfts[id].cakeRewardDebt;
+    function _baseURI() internal view override returns (string memory) {
+        return baseURI;
     }
 
     function permit(
@@ -149,65 +84,40 @@ contract CakeNFT is Ownable, ERC721("CakeNFT", "CNFT"), ERC721Enumerable, ICakeN
         bytes32 r,
         bytes32 s
     ) external override {
-        require(block.timestamp <= deadline, "CakeNFT: Expired deadline");
-        bytes32 _DOMAIN_SEPARATOR = DOMAIN_SEPARATOR();
+        require(block.timestamp <= deadline);
 
         bytes32 digest = keccak256(
             abi.encodePacked(
                 "\x19\x01",
-                _DOMAIN_SEPARATOR,
+                DOMAIN_SEPARATOR,
                 keccak256(abi.encode(PERMIT_TYPEHASH, spender, id, nonces[id], deadline))
             )
         );
         nonces[id] += 1;
 
         address owner = ownerOf(id);
-        require(spender != owner, "CakeNFT: Invalid spender");
+        require(spender != owner);
 
         if (Address.isContract(owner)) {
-            require(
-                IERC1271(owner).isValidSignature(digest, abi.encodePacked(r, s, v)) == 0x1626ba7e,
-                "CakeNFT: Unauthorized"
-            );
+            require(IERC1271(owner).isValidSignature(digest, abi.encodePacked(r, s, v)) == 0x1626ba7e);
         } else {
-            address recoveredAddress = Signature.recover(digest, v, r, s);
-            require(recoveredAddress == owner, "CakeNFT: Unauthorized");
+            address recoveredAddress = ecrecover(digest, v, r, s);
+            require(recoveredAddress != address(0));
+            require(recoveredAddress == owner);
         }
 
         _approve(spender, id);
     }
 
-    function permitAll(
-        address owner,
-        address spender,
-        uint256 deadline,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external override {
-        require(block.timestamp <= deadline, "CakeNFT: Expired deadline");
-        bytes32 _DOMAIN_SEPARATOR = DOMAIN_SEPARATOR();
+    function mint(address to) onlyDeployer external override returns (uint256 id) {
+        id = count;
+        count += 1;
+        _mint(to, id);
+    }
 
-        bytes32 digest = keccak256(
-            abi.encodePacked(
-                "\x19\x01",
-                _DOMAIN_SEPARATOR,
-                keccak256(abi.encode(PERMIT_ALL_TYPEHASH, owner, spender, noncesForAll[owner], deadline))
-            )
-        );
-        noncesForAll[owner] += 1;
-
-        if (Address.isContract(owner)) {
-            require(
-                IERC1271(owner).isValidSignature(digest, abi.encodePacked(r, s, v)) == 0x1626ba7e,
-                "CakeNFT: Unauthorized"
-            );
-        } else {
-            address recoveredAddress = Signature.recover(digest, v, r, s);
-            require(recoveredAddress == owner, "CakeNFT: Unauthorized");
-        }
-
-        _setApprovalForAll(owner, spender, true);
+    function burn(uint256 id) external override {
+        require(msg.sender == ownerOf(id));
+        _burn(id);
     }
 
     function _beforeTokenTransfer(
@@ -225,82 +135,5 @@ contract CakeNFT is Ownable, ERC721("CakeNFT", "CNFT"), ERC721Enumerable, ICakeN
         returns (bool)
     {
         return super.supportsInterface(interfaceId);
-    }
-
-    function setCakeMasterChef(IMasterChef _masterChef, uint256 _pid) external override onlyOwner {
-        require(address(_masterChef.poolInfo(_pid).lpToken) == address(lpToken), "CakeNFT: Invalid pid");
-        if (!initialDeposited) {
-            initialDeposited = true;
-            lpToken.approve(address(_masterChef), type(uint256).max);
-
-            cakeStaker = _masterChef;
-            pid = _pid;
-            _depositToCakeMasterChef(_pid, lpToken.balanceOf(address(this)), 0);
-        } else {
-            IMasterChef oldChef = cakeStaker;
-            uint256 oldpid = pid;
-            _withdrawFromCakeMasterChef(oldpid, oldChef.userInfo(oldpid, address(this)).amount, 0);
-            if (_masterChef != oldChef) {
-                lpToken.approve(address(oldChef), 0);
-                lpToken.approve(address(_masterChef), type(uint256).max);
-            }
-
-            cakeStaker = _masterChef;
-            pid = _pid;
-            _depositToCakeMasterChef(_pid, lpToken.balanceOf(address(this)), 0);
-        }
-    }
-
-    function _depositToCakeMasterChef(
-        uint256 _pid,
-        uint256 _amount,
-        uint256 _totalSupportedLPTokenAmount
-    ) internal returns (uint256 _accCakePerShare) {
-        return _toCakeMasterChef(true, _pid, _amount, _totalSupportedLPTokenAmount);
-    }
-
-    function _withdrawFromCakeMasterChef(
-        uint256 _pid,
-        uint256 _amount,
-        uint256 _totalSupportedLPTokenAmount
-    ) internal returns (uint256 _accCakePerShare) {
-        return _toCakeMasterChef(false, _pid, _amount, _totalSupportedLPTokenAmount);
-    }
-
-    function _toCakeMasterChef(
-        bool deposit,
-        uint256 _pid,
-        uint256 _amount,
-        uint256 _totalSupportedLPTokenAmount
-    ) internal returns (uint256) {
-        uint256 reward;
-        if (block.number <= cakeLastRewardBlock) {
-            if (deposit) cakeStaker.deposit(_pid, _amount);
-            else cakeStaker.withdraw(_pid, _amount);
-            return accCakePerShare;
-        } else {
-            uint256 balance0 = cake.balanceOf(address(this));
-            if (deposit) cakeStaker.deposit(_pid, _amount);
-            else cakeStaker.withdraw(_pid, _amount);
-            uint256 balance1 = cake.balanceOf(address(this));
-            reward = balance1 - balance0;
-        }
-        cakeLastRewardBlock = block.number;
-        if (_totalSupportedLPTokenAmount > 0 && reward > 0) {
-            uint256 _accCakePerShare = accCakePerShare + ((reward * 1e18) / _totalSupportedLPTokenAmount);
-            accCakePerShare = _accCakePerShare;
-            return _accCakePerShare;
-        } else {
-            return accCakePerShare;
-        }
-    }
-
-    function safeCakeTransfer(address _to, uint256 _amount) internal {
-        uint256 cakeBal = cake.balanceOf(address(this));
-        if (_amount > cakeBal) {
-            cake.transfer(_to, cakeBal);
-        } else {
-            cake.transfer(_to, _amount);
-        }
     }
 }
