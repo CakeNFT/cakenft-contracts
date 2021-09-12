@@ -23,6 +23,6 @@ interface ICakeNFT is IERC721, IERC721Metadata, IERC721Enumerable {
         bytes32 s
     ) external;
 
-    function mint(address to) external returns (uint256 id);
+    function mint() external returns (uint256 id);
     function burn(uint256 id) external;
 }

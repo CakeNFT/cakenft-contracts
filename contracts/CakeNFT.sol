@@ -109,10 +109,10 @@ contract CakeNFT is ERC721, ERC721Enumerable, ICakeNFT {
         _approve(spender, id);
     }
 
-    function mint(address to) onlyDeployer external override returns (uint256 id) {
+    function mint() onlyDeployer external override returns (uint256 id) {
         id = count;
         count += 1;
-        _mint(to, id);
+        _mint(msg.sender, id);
     }
 
     function burn(uint256 id) external override {
