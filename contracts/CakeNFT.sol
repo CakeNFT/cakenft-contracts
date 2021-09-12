@@ -27,13 +27,13 @@ contract CakeNFT is ERC721, ERC721Enumerable, ICakeNFT {
     mapping(uint256 => uint256) public override nonces;
 
     constructor(
-        address _deployer,
         string memory name,
         string memory symbol,
         string memory _version,
         string memory baseURI_
     ) ERC721(name, symbol) {
-        deployer = _deployer;
+
+        deployer = msg.sender;
         version = _version;
         baseURI = baseURI_;
 
