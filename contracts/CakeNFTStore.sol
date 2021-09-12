@@ -6,13 +6,15 @@ import "./interfaces/ICakeNFTStore.sol";
 
 contract CakeNFTStore is Ownable, ICakeNFTStore {
 
-    IERC20 override public cake;
+    IERC20 override immutable public cake;
+    ICakeStaker override immutable public cakeStaker;
 
-    constructor(IERC20 _cake) {
+    constructor(IERC20 _cake, ICakeStaker _cakeStaker) {
         cake = _cake;
+        cakeStaker = _cakeStaker;
     }
 
-    uint256 public ownerFee = 25 * 1e4 / 100;
+    uint256 public ownerFee = 25 * 1e4 / 1000;
 
     function setOwnerFee(uint256 fee) onlyOwner external {
         ownerFee = fee;
@@ -20,21 +22,26 @@ contract CakeNFTStore is Ownable, ICakeNFTStore {
     
     struct NFTDeployer {
         address deployer;
+        uint256 staking; // 1e4
         uint256 fee; // 1e4
     }
     mapping(IERC721 => NFTDeployer) public nftDeployers;
+    mapping(IERC721 => bool) public initSolds;
 
-    function add(ICakeNFT nft, uint256 fee) override external {
-        require(nft.deployer() == msg.sender);
+    function set(ICakeNFT nft, uint256 staking, uint256 fee) override external {
+        require(nft.deployer() == msg.sender && staking >= 1e3 && fee <= 1e3);
         nftDeployers[nft] = NFTDeployer({
             deployer: msg.sender,
+            staking: staking,
             fee: fee
         });
     }
 
-    function setNFTDeployer(IERC721 nft, address deployer, uint256 fee) onlyOwner external {
+    function setNFTDeployer(IERC721 nft, address deployer, uint256 staking, uint256 fee) onlyOwner external {
+        require(staking >= 1e3 && fee <= 1e3);
         nftDeployers[nft] = NFTDeployer({
             deployer: deployer,
+            staking: staking,
             fee: fee
         });
     }
@@ -91,6 +98,11 @@ contract CakeNFTStore is Ownable, ICakeNFTStore {
     function distributeReward(IERC721 nft, address to, uint256 price) internal {
         uint256 _ownerFee = price * ownerFee / 1e4;
         cake.transfer(owner(), _ownerFee);
+
+        if (initSolds[nft] != true) {
+            //TODO:
+            initSolds[nft] = true;
+        }
         
         NFTDeployer memory deployer = nftDeployers[nft];
         if (deployer.deployer != address(0)) {

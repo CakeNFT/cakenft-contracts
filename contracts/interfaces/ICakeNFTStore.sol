@@ -2,6 +2,7 @@
 pragma solidity ^0.8.5;
 
 import "./ICakeNFT.sol";
+import "./ICakeStaker.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -21,7 +22,8 @@ interface ICakeNFTStore {
     event Claim(IERC721 indexed nft, uint256 indexed nftId, address indexed bidder, uint256 price);
     
     function cake() external returns (IERC20);
-    function add(ICakeNFT nft, uint256 fee) external;
+    function cakeStaker() external returns (ICakeStaker);
+    function set(ICakeNFT nft, uint256 staking, uint256 fee) external;
 
     function sell(IERC721 nft, uint256 nftId, uint256 price) external;
     function sellWithPermit(ICakeNFT nft, uint256 nftId, uint256 price,
