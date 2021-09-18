@@ -74,7 +74,12 @@ contract CakeNFTStore is Ownable, ICakeNFTStore, CakeDividend {
     }
     mapping(IERC721 => mapping(uint256 => Bidding[])) public biddings;
 
-    function sell(IERC721 nft, uint256 nftId, uint256 price) override public {
+    modifier whitelist(IERC721 nft) {
+        require(nftDeployers[nft].deployer != address(0));
+        _;
+    }
+
+    function sell(IERC721 nft, uint256 nftId, uint256 price) whitelist(nft) override public {
         require(nft.ownerOf(nftId) == msg.sender && checkAuction(nft, nftId) != true);
         nft.transferFrom(msg.sender, address(this), nftId);
         sales[nft][nftId] = Sale({
@@ -105,11 +110,8 @@ contract CakeNFTStore is Ownable, ICakeNFTStore, CakeDividend {
         ownerVault.deposit(_ownerFee);
         
         NFTDeployer memory deployer = nftDeployers[nft];
-        uint256 deployerFee = 0;
-        if (deployer.deployer != address(0)) {
-            deployerFee = price * deployer.fee / 1e4;
-            cake.transfer(deployer.deployer, deployerFee);
-        }
+        uint256 deployerFee = price * deployer.fee / 1e4;
+        cake.transfer(deployer.deployer, deployerFee);
         
         uint256 staking = 0;
         if (initSolds[nft] != true) {
@@ -121,7 +123,7 @@ contract CakeNFTStore is Ownable, ICakeNFTStore, CakeDividend {
         cake.transfer(to, price - _ownerFee - deployerFee - staking);
     }
 
-    function buy(IERC721 nft, uint256 nftId) override public {
+    function buy(IERC721 nft, uint256 nftId) override external {
         Sale memory sale = sales[nft][nftId];
         require(sale.seller != address(0));
         delete sales[nft][nftId];
@@ -139,7 +141,15 @@ contract CakeNFTStore is Ownable, ICakeNFTStore, CakeDividend {
         emit CancelSale(nft, nftId, msg.sender);
     }
 
-    function offer(IERC721 nft, uint256 nftId, uint256 price) override public returns (uint256 offerId) {
+    function userMint(IUserMintNFT nft) override external returns (uint256 id) {
+        uint256 mintPrice = nft.mintPrice();
+        id = nft.mint(msg.sender);
+        cake.transferFrom(msg.sender, address(this), mintPrice);
+        distributeReward(nft, id, nft.deployer(), mintPrice);
+        emit UserMint(nft, id, msg.sender, mintPrice);
+    }
+
+    function offer(IERC721 nft, uint256 nftId, uint256 price) whitelist(nft) override public returns (uint256 offerId) {
         require(price > 0);
         OfferInfo[] storage os = offers[nft][nftId];
         offerId = os.length;
@@ -181,7 +191,7 @@ contract CakeNFTStore is Ownable, ICakeNFTStore, CakeDividend {
         emit AcceptOffer(nft, nftId, offerId, msg.sender);
     }
 
-    function auction(IERC721 nft, uint256 nftId, uint256 startPrice, uint256 endBlock) override public {
+    function auction(IERC721 nft, uint256 nftId, uint256 startPrice, uint256 endBlock) whitelist(nft) override public {
         require(nft.ownerOf(nftId) == msg.sender && checkSelling(nft, nftId) != true);
         nft.transferFrom(msg.sender, address(this), nftId);
         auctions[nft][nftId] = AuctionInfo({

@@ -3,12 +3,13 @@ import { ecsign } from "ethereumjs-util";
 import { BigNumber, constants } from "ethers";
 import { waffle } from "hardhat";
 import CakeNFTArtifact from "../artifacts/contracts/CakeNFT.sol/CakeNFT.json";
+import UserMintNFTArtifact from "../artifacts/contracts/UserMintNFT.sol/UserMintNFT.json";
 import CakeNFTStoreArtifact from "../artifacts/contracts/CakeNFTStore.sol/CakeNFTStore.json";
 import CakeOwnerVaultArtifact from "../artifacts/contracts/CakeOwnerVault.sol/CakeOwnerVault.json";
 import CakeVaultArtifact from "../artifacts/contracts/CakeVault.sol/CakeVault.json";
 import MockCakeArtifact from "../artifacts/contracts/MockCake.sol/MockCake.json";
 import MockCakeStakerArtifact from "../artifacts/contracts/MockCakeStaker.sol/MockCakeStaker.json";
-import { CakeNFT, CakeNFTStore, CakeOwnerVault, CakeVault, MockCake, MockCakeStaker } from "../typechain";
+import { CakeNFT, CakeNFTStore, CakeOwnerVault, CakeVault, MockCake, MockCakeStaker, UserMintNFT } from "../typechain";
 import { mine } from "./shared/utils/blockchain";
 import { expandTo18Decimals } from "./shared/utils/number";
 import { getERC721ApprovalDigest } from "./shared/utils/standard";
@@ -21,6 +22,7 @@ describe("CakeNFTStore", () => {
     let cakeOwnerVault: CakeOwnerVault;
     let cakeVault: CakeVault;
     let nft: CakeNFT;
+    let userMintNFT: UserMintNFT;
     let store: CakeNFTStore;
 
     const provider = waffle.provider;
@@ -63,6 +65,15 @@ describe("CakeNFTStore", () => {
             CakeNFTStoreArtifact,
             [cake.address, cakeStaker.address, cakeOwnerVault.address, cakeVault.address]
         ) as CakeNFTStore;
+
+        userMintNFT = await deployContract(
+            admin,
+            UserMintNFTArtifact,
+            [store.address, "Test NFT", "TEST", "1", "http://testnft.com", 1, 1]
+        ) as UserMintNFT;
+
+        await store.set(nft.address, 5000, 1000);
+        await store.set(userMintNFT.address, 5000, 1000);
     })
 
     context("new CakeNFTStore", async () => {
@@ -78,6 +89,19 @@ describe("CakeNFTStore", () => {
             await expect(store.connect(other).buy(nft.address, 0))
                 .to.emit(store, "Buy")
                 .withArgs(nft.address, 0, other.address, price)
+
+            await expect(cakeOwnerVault.claim()).not.to.reverted;
+            await expect(cakeVault.claim()).not.to.reverted;
+        })
+        
+        it("user mint", async () => {
+            
+            await cake.connect(other).mint(1);
+            await cake.connect(other).approve(store.address, 1);
+            await expect(store.connect(other).userMint(userMintNFT.address))
+                .to.emit(store, "UserMint")
+                .withArgs(userMintNFT.address, 0, other.address, 1)
+            await expect(store.connect(other).userMint(userMintNFT.address)).to.reverted;
 
             await expect(cakeOwnerVault.claim()).not.to.reverted;
             await expect(cakeVault.claim()).not.to.reverted;
@@ -248,7 +272,6 @@ describe("CakeNFTStore", () => {
         it("buy and stake", async () => {
             await nft.mint()
             await nft.approve(store.address, 0)
-            await store.set(nft.address, 5000, 1000);
             const price = expandTo18Decimals(10)
             await expect(store.sell(nft.address, 0, price))
                 .to.emit(store, "Sell")
