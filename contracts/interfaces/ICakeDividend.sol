@@ -12,6 +12,8 @@ interface ICakeDividend {
 
     function cake() external returns (IERC20);
     function cakeStaker() external returns (ICakeStaker);
+    function totalStakedCakeBalance() view external returns (uint256);
+    function stakedCakeBalances(IERC721 nft, uint256 nftId) external view returns (uint256);
     
     function accumulativeCakeOf(IERC721 nft, uint256 nftId) external view returns (uint256);
     function claimedCakeOf(IERC721 nft, uint256 nftId) external view returns (uint256);

@@ -1,1 +1,5 @@
 # cakenft-contracts
+
+- CakeOwnerVault address: 0xFAe46338A764BA3822f4Ff89A7F61a65aCE7297B
+- CakeVault address: 0xa674048E5E255B581aaC66eaA6DCe07c54ECB5D6
+- CakeNFTStore address: 0x1DC22203157529184af7C63d42f632b2BEE317Bd

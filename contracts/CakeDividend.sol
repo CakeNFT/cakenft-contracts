@@ -14,8 +14,8 @@ contract CakeDividend is ICakeDividend {
     }
 
     uint256 internal currentBalance = 0;
-    uint256 internal totalTokenBalance = 0;
-    mapping(IERC721 => mapping(uint256 => uint256)) public tokenBalances;
+    uint256 override public totalStakedCakeBalance = 0;
+    mapping(IERC721 => mapping(uint256 => uint256)) override public stakedCakeBalances;
 
     uint256 constant internal pointsMultiplier = 2**128;
     uint256 internal pointsPerShare = 0;
@@ -23,12 +23,12 @@ contract CakeDividend is ICakeDividend {
     mapping(IERC721 => mapping(uint256 => uint256)) public claimed;
 
     function updateBalance() internal {
-        if (totalTokenBalance > 0) {
+        if (totalStakedCakeBalance > 0) {
             cakeStaker.leaveStaking(0);
             uint256 balance = cake.balanceOf(address(this));
             uint256 value = balance - currentBalance;
             if (value > 0) {
-                pointsPerShare += value * pointsMultiplier / totalTokenBalance;
+                pointsPerShare += value * pointsMultiplier / totalStakedCakeBalance;
                 emit DistributeCake(msg.sender, value);
             }
             currentBalance = balance;
@@ -41,13 +41,13 @@ contract CakeDividend is ICakeDividend {
 
     function accumulativeCakeOf(IERC721 nft, uint256 nftId) override public view returns (uint256) {
         uint256 _pointsPerShare = pointsPerShare;
-        if (totalTokenBalance > 0) {
+        if (totalStakedCakeBalance > 0) {
             uint256 balance = cakeStaker.pendingCake(0, address(this)) + cake.balanceOf(address(this));
             uint256 value = balance - currentBalance;
             if (value > 0) {
-                _pointsPerShare += value * pointsMultiplier / totalTokenBalance;
+                _pointsPerShare += value * pointsMultiplier / totalStakedCakeBalance;
             }
-            return uint256(int256(_pointsPerShare * tokenBalances[nft][nftId]) + pointsCorrection[nft][nftId]) / pointsMultiplier;
+            return uint256(int256(_pointsPerShare * stakedCakeBalances[nft][nftId]) + pointsCorrection[nft][nftId]) / pointsMultiplier;
         }
         return 0;
     }
@@ -57,7 +57,7 @@ contract CakeDividend is ICakeDividend {
     }
 
     function _accumulativeCakeOf(IERC721 nft, uint256 nftId) internal view returns (uint256) {
-        return uint256(int256(pointsPerShare * tokenBalances[nft][nftId]) + pointsCorrection[nft][nftId]) / pointsMultiplier;
+        return uint256(int256(pointsPerShare * stakedCakeBalances[nft][nftId]) + pointsCorrection[nft][nftId]) / pointsMultiplier;
     }
 
     function _claimableCakeOf(IERC721 nft, uint256 nftId) internal view returns (uint256) {
@@ -79,8 +79,8 @@ contract CakeDividend is ICakeDividend {
         updateBalance();
         cake.approve(address(cakeStaker), amount);
         cakeStaker.enterStaking(amount);
-        totalTokenBalance += amount;
-        tokenBalances[nft][nftId] += amount;
+        totalStakedCakeBalance += amount;
+        stakedCakeBalances[nft][nftId] += amount;
         pointsCorrection[nft][nftId] -= int256(pointsPerShare * amount);
     }
 }
