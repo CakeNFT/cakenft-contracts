@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.5;
 
+import "./ICakeDividend.sol";
 import "./ICakeNFT.sol";
 import "./ICakeStaker.sol";
-import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-interface ICakeNFTStore {
+interface ICakeNFTStore is ICakeDividend {
     
     event Sell(IERC721 indexed nft, uint256 indexed nftId, address indexed owner, uint256 price);
     event Buy(IERC721 indexed nft, uint256 indexed nftId, address indexed buyer, uint256 price);
@@ -21,8 +20,6 @@ interface ICakeNFTStore {
     event Bid(IERC721 indexed nft, uint256 indexed nftId, address indexed bidder, uint256 price);
     event Claim(IERC721 indexed nft, uint256 indexed nftId, address indexed bidder, uint256 price);
     
-    function cake() external returns (IERC20);
-    function cakeStaker() external returns (ICakeStaker);
     function set(ICakeNFT nft, uint256 staking, uint256 fee) external;
 
     function sell(IERC721 nft, uint256 nftId, uint256 price) external;
