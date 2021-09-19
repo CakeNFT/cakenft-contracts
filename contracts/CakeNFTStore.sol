@@ -12,9 +12,20 @@ contract CakeNFTStore is Ownable, ICakeNFTStore, CakeDividend {
     ICakeOwnerVault immutable public ownerVault;
     ICakeVault immutable public vault;
 
-    constructor(IERC20 _cake, ICakeStaker _cakeStaker, ICakeOwnerVault _ownerVault, ICakeVault _vault) CakeDividend(_cake, _cakeStaker) {
+    address public oracle;
+
+    function setOracle(address _oracle) onlyOwner external {
+        oracle = _oracle;
+    }
+
+    constructor(
+        IERC20 _cake, ICakeStaker _cakeStaker,
+        ICakeOwnerVault _ownerVault, ICakeVault _vault,
+        address _oracle
+    ) CakeDividend(_cake, _cakeStaker) {
         ownerVault = _ownerVault;
         vault = _vault;
+        oracle = _oracle;
     }
 
     uint256 public ownerFee = 25 * 1e4 / 1000;
@@ -40,7 +51,29 @@ contract CakeNFTStore is Ownable, ICakeNFTStore, CakeDividend {
         });
     }
 
-    function setNFTDeployer(IERC721 nft, address deployer, uint256 staking, uint256 fee) onlyOwner external {
+    function setNFTDeployer(IERC721 nft, address deployer, uint256 staking, uint256 fee, bytes memory signature) external {
+        require(signature.length == 65, "invalid signature length");
+
+        bytes32 hash = keccak256(abi.encodePacked(msg.sender, address(nft), deployer, staking, fee));
+        hash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", hash));
+
+        bytes32 r;
+        bytes32 s;
+        uint8 v;
+
+        assembly {
+            r := mload(add(signature, 32))
+            s := mload(add(signature, 64))
+            v := byte(0, mload(add(signature, 96)))
+        }
+
+        if (v < 27) {
+            v += 27;
+        }
+        require(v == 27 || v == 28, "invalid signature version");
+
+        require(ecrecover(hash, v, r, s) == oracle);
+        
         require(staking >= 1e3 && staking <= 1e4 && fee <= 1e3);
         nftDeployers[nft] = NFTDeployer({
             deployer: deployer,
