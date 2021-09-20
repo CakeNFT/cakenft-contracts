@@ -15,7 +15,11 @@ async function main() {
     console.log(`CakeVault address: ${cakeVault.address}`)
 
     const CakeNFTStore = await hardhat.ethers.getContractFactory("CakeNFTStore")
-    const cakeNFTStore = await CakeNFTStore.deploy(CAKE, CAKE_MASTER_CHEF, cakeOwnerVault.address, cakeVault.address)
+    const cakeNFTStore = await CakeNFTStore.deploy(
+        CAKE, CAKE_MASTER_CHEF,
+        cakeOwnerVault.address, cakeVault.address,
+        "0xE671E2511E02de8Ad99Cde43adf0C48ED883DabD"
+    )
     console.log(`CakeNFTStore address: ${cakeNFTStore.address}`)
 }
 
