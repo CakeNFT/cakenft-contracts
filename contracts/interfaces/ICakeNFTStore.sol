@@ -24,6 +24,7 @@ interface ICakeNFTStore is ICakeDividend {
     
     function nfts(uint256 index) external returns (address);
     function nftCount() view external returns (uint256);
+    function totalTradingVolumes(IERC721 nft) view external returns (uint256);
 
     function set(ICakeNFT nft, uint256 staking, uint256 fee) external;
 

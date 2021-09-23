@@ -4,15 +4,19 @@ pragma solidity ^0.8.5;
 import "./libraries/ERC721.sol";
 import "./libraries/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
-import "./interfaces/ICakeNFT.sol";
+import "./interfaces/IDeployerMintNFT.sol";
 import "./interfaces/IERC1271.sol";
 
-contract CakeNFT is ERC721, ERC721Enumerable, ICakeNFT {
+contract DeployerMintNFT is ERC721, ERC721Enumerable, IDeployerMintNFT {
     
     address override public deployer;
     modifier onlyDeployer {
         require(msg.sender == deployer);
         _;
+    }
+
+    function artists(uint256 id) external override view returns (address) {
+        return deployer;
     }
 
     string public override version;

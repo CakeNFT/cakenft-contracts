@@ -17,6 +17,10 @@ contract CakeSimpleNFTV1 is ERC721, ERC721Enumerable, ICakeSimpleNFTV1 {
 
     uint256 public count = 0;
     
+    function version() external override pure returns (string memory) {
+        return "1";
+    }
+    
     bytes32 public override DOMAIN_SEPARATOR;
 
     // keccak256("Permit(address spender,uint256 tokenId,uint256 nonce,uint256 deadline)");

@@ -34,34 +34,38 @@ contract CakeNFTStore is Ownable, ICakeNFTStore, CakeDividend {
         ownerFee = fee;
     }
     
-    struct NFTDeployer {
+    struct NFTInfo {
         address deployer;
+        bool cakeNFT;
         uint256 staking; // 1e4
         uint256 fee; // 1e4
     }
-    mapping(IERC721 => NFTDeployer) public nftDeployers;
+    mapping(IERC721 => NFTInfo) public nftInfos;
     mapping(IERC721 => bool) public initSolds;
 
     address[] override public nfts;
     function nftCount() override view external returns (uint256) {
         return nfts.length;
     }
+    
+    mapping(IERC721 => uint256) override public totalTradingVolumes;
 
     function set(ICakeNFT nft, uint256 staking, uint256 fee) override external {
         require(nft.deployer() == msg.sender && staking >= 1e3 && staking <= 1e4 && fee <= 1e3);
 
-        if (nftDeployers[nft].deployer != address(0)) {
+        if (nftInfos[nft].deployer != address(0)) {
             nfts.push(address(nft));
         }
 
-        nftDeployers[nft] = NFTDeployer({
+        nftInfos[nft] = NFTInfo({
             deployer: msg.sender,
+            cakeNFT: true,
             staking: staking,
             fee: fee
         });
     }
 
-    function setNFTDeployer(IERC721 nft, address deployer, uint256 staking, uint256 fee, bytes memory signature) external {
+    function setNFTInfo(IERC721 nft, address deployer, uint256 staking, uint256 fee, bytes memory signature) external {
         require(signature.length == 65, "invalid signature length");
 
         bytes32 hash = keccak256(abi.encodePacked(msg.sender, address(nft), deployer, staking, fee));
@@ -86,12 +90,13 @@ contract CakeNFTStore is Ownable, ICakeNFTStore, CakeDividend {
         
         require(staking >= 1e3 && staking <= 1e4 && fee <= 1e3);
         
-        if (nftDeployers[nft].deployer != address(0)) {
+        if (nftInfos[nft].deployer != address(0)) {
             nfts.push(address(nft));
         }
 
-        nftDeployers[nft] = NFTDeployer({
+        nftInfos[nft] = NFTInfo({
             deployer: deployer,
+            cakeNFT: false,
             staking: staking,
             fee: fee
         });
@@ -129,7 +134,7 @@ contract CakeNFTStore is Ownable, ICakeNFTStore, CakeDividend {
     }
 
     modifier whitelist(IERC721 nft) {
-        require(nftDeployers[nft].deployer != address(0));
+        require(nftInfos[nft].deployer != address(0));
         _;
     }
 
@@ -163,18 +168,24 @@ contract CakeNFTStore is Ownable, ICakeNFTStore, CakeDividend {
         cake.approve(address(ownerVault), _ownerFee);
         ownerVault.deposit(_ownerFee);
         
-        NFTDeployer memory deployer = nftDeployers[nft];
-        uint256 deployerFee = price * deployer.fee / 1e4;
-        cake.transfer(deployer.deployer, deployerFee);
+        NFTInfo memory info = nftInfos[nft];
+        uint256 artistFee = price * info.fee / 1e4;
+
+        cake.transfer(
+            info.cakeNFT == true ? ICakeNFT(address(nft)).artists(nftId) : info.deployer,
+            artistFee
+        );
         
         uint256 staking = 0;
         if (initSolds[nft] != true) {
-            staking = price * deployer.staking / 1e4;
+            staking = price * info.staking / 1e4;
             _stakeCake(nft, nftId, staking);
             initSolds[nft] = true;
         }
 
-        cake.transfer(to, price - _ownerFee - deployerFee - staking);
+        cake.transfer(to, price - _ownerFee - artistFee - staking);
+
+        totalTradingVolumes[nft] += price;
     }
 
     function buy(IERC721 nft, uint256 nftId) override external {

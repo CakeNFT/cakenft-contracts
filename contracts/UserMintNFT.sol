@@ -15,6 +15,10 @@ contract UserMintNFT is ERC721, ERC721Enumerable, IUserMintNFT {
         _;
     }
 
+    function artists(uint256 id) external override view returns (address) {
+        return deployer;
+    }
+
     address public immutable override storeAddress;
     string public override version;
     uint256 public override mintPrice;

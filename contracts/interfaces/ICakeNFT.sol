@@ -8,6 +8,8 @@ import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol";
 interface ICakeNFT is IERC721, IERC721Metadata, IERC721Enumerable {
 
     function deployer() external view returns (address);
+    function artists(uint256 id) external view returns (address);
+
     function version() external view returns (string memory);
 
     function DOMAIN_SEPARATOR() external view returns (bytes32);
@@ -23,7 +25,5 @@ interface ICakeNFT is IERC721, IERC721Metadata, IERC721Enumerable {
         bytes32 s
     ) external;
 
-    function mint() external returns (uint256 id);
-    function massMint(uint256 count) external;
     function burn(uint256 id) external;
 }
