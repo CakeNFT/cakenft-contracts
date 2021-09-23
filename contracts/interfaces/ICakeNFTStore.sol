@@ -22,7 +22,33 @@ interface ICakeNFTStore is ICakeDividend {
     event Bid(IERC721 indexed nft, uint256 indexed nftId, address indexed bidder, uint256 price);
     event Claim(IERC721 indexed nft, uint256 indexed nftId, address indexed bidder, uint256 price);
     
+    function nfts(uint256 index) external returns (address);
+    function nftCount() view external returns (uint256);
+
     function set(ICakeNFT nft, uint256 staking, uint256 fee) external;
+
+    function sales(IERC721 nft, uint256 nftId) external returns (
+        address seller,
+        uint256 price
+    );
+
+    function offers(IERC721 nft, uint256 nftId, uint256 index) external returns (
+        address offeror,
+        uint256 price
+    );
+    function offerCount(IERC721 nft, uint256 nftId) view external returns (uint256);
+
+    function auctions(IERC721 nft, uint256 nftId) external returns (
+        address seller,
+        uint256 startPrice,
+        uint256 endBlock
+    );
+
+    function biddings(IERC721 nft, uint256 nftId, uint256 index) external returns (
+        address bidder,
+        uint256 price
+    );
+    function biddingCount(IERC721 nft, uint256 nftId) view external returns (uint256);
 
     function sell(IERC721 nft, uint256 nftId, uint256 price) external;
     function sellWithPermit(ICakeNFT nft, uint256 nftId, uint256 price,

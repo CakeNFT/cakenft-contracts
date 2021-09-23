@@ -42,8 +42,18 @@ contract CakeNFTStore is Ownable, ICakeNFTStore, CakeDividend {
     mapping(IERC721 => NFTDeployer) public nftDeployers;
     mapping(IERC721 => bool) public initSolds;
 
+    address[] override public nfts;
+    function nftCount() override view external returns (uint256) {
+        return nfts.length;
+    }
+
     function set(ICakeNFT nft, uint256 staking, uint256 fee) override external {
         require(nft.deployer() == msg.sender && staking >= 1e3 && staking <= 1e4 && fee <= 1e3);
+
+        if (nftDeployers[nft].deployer != address(0)) {
+            nfts.push(address(nft));
+        }
+
         nftDeployers[nft] = NFTDeployer({
             deployer: msg.sender,
             staking: staking,
@@ -75,6 +85,11 @@ contract CakeNFTStore is Ownable, ICakeNFTStore, CakeDividend {
         require(ecrecover(hash, v, r, s) == oracle);
         
         require(staking >= 1e3 && staking <= 1e4 && fee <= 1e3);
+        
+        if (nftDeployers[nft].deployer != address(0)) {
+            nfts.push(address(nft));
+        }
+
         nftDeployers[nft] = NFTDeployer({
             deployer: deployer,
             staking: staking,
@@ -86,26 +101,32 @@ contract CakeNFTStore is Ownable, ICakeNFTStore, CakeDividend {
         address seller;
         uint256 price;
     }
-    mapping(IERC721 => mapping(uint256 => Sale)) public sales;
+    mapping(IERC721 => mapping(uint256 => Sale)) override public sales;
 
     struct OfferInfo {
         address offeror;
         uint256 price;
     }
-    mapping(IERC721 => mapping(uint256 => OfferInfo[])) public offers;
+    mapping(IERC721 => mapping(uint256 => OfferInfo[])) override public offers;
+    function offerCount(IERC721 nft, uint256 nftId) override view external returns (uint256) {
+        return offers[nft][nftId].length;
+    }
     
     struct AuctionInfo {
         address seller;
         uint256 startPrice;
         uint256 endBlock;
     }
-    mapping(IERC721 => mapping(uint256 => AuctionInfo)) public auctions;
+    mapping(IERC721 => mapping(uint256 => AuctionInfo)) override public auctions;
     
     struct Bidding {
         address bidder;
         uint256 price;
     }
-    mapping(IERC721 => mapping(uint256 => Bidding[])) public biddings;
+    mapping(IERC721 => mapping(uint256 => Bidding[])) override public biddings;
+    function biddingCount(IERC721 nft, uint256 nftId) override view external returns (uint256) {
+        return biddings[nft][nftId].length;
+    }
 
     modifier whitelist(IERC721 nft) {
         require(nftDeployers[nft].deployer != address(0));

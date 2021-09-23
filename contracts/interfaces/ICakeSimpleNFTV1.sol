@@ -12,6 +12,7 @@ interface ICakeSimpleNFTV1 is IERC721, IERC721Metadata, IERC721Enumerable {
     function DOMAIN_SEPARATOR() external view returns (bytes32);
     function PERMIT_TYPEHASH() external view returns (bytes32);
     function nonces(uint256 id) external view returns (uint256);
+    function artists(uint256 id) external view returns (address);
 
     function permit(
         address spender,

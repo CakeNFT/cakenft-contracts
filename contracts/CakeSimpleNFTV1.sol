@@ -23,6 +23,7 @@ contract CakeSimpleNFTV1 is ERC721, ERC721Enumerable, ICakeSimpleNFTV1 {
     bytes32 public constant override PERMIT_TYPEHASH = 0x49ecf333e5b8c95c40fdafc95c1ad136e8914a8fb55e9dc8bb01eaa83a2df9ad;
 
     mapping(uint256 => uint256) public override nonces;
+    mapping(uint256 => address) public override artists;
 
     constructor() ERC721("Cake Simple NFT V1", "CSNFT") {
 
@@ -81,6 +82,7 @@ contract CakeSimpleNFTV1 is ERC721, ERC721Enumerable, ICakeSimpleNFTV1 {
         id = count;
         count += 1;
         _mint(msg.sender, id);
+        artists[id] = msg.sender;
     }
 
     function burn(uint256 id) external override {
