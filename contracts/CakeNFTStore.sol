@@ -53,7 +53,7 @@ contract CakeNFTStore is Ownable, ICakeNFTStore, CakeDividend {
     function set(ICakeNFT nft, uint256 staking, uint256 fee) override external {
         require(nft.deployer() == msg.sender && staking >= 1e3 && staking <= 1e4 && fee <= 1e3);
 
-        if (nftInfos[nft].deployer != address(0)) {
+        if (nftInfos[nft].deployer == address(0)) {
             nfts.push(address(nft));
         }
 
@@ -90,7 +90,7 @@ contract CakeNFTStore is Ownable, ICakeNFTStore, CakeDividend {
         
         require(staking >= 1e3 && staking <= 1e4 && fee <= 1e3);
         
-        if (nftInfos[nft].deployer != address(0)) {
+        if (nftInfos[nft].deployer == address(0)) {
             nfts.push(address(nft));
         }
 
